@@ -29,12 +29,18 @@ const (
 	moduleName               = "twitter"
 	mqttConnectRetryInternal = 5
 	mqttDisconnectTimeout    = 1000
+	tweetURLRegex            = `(http(s)?:\/\/.)?(www\.)?twitter.com/\w+/status/\d+`
 )
 
 func genTwitterHandler(client *twitter.Client) func(m gowon.Message) (string, error) {
-
 	return func(m gowon.Message) (string, error) {
 		return twit(m.Args, client)
+	}
+}
+
+func genTweetFromUrlHandler(client *twitter.Client) func(m gowon.Message) (string, error) {
+	return func(m gowon.Message) (string, error) {
+		return tweetFromUrl(m.Args, client)
 	}
 }
 
@@ -81,6 +87,7 @@ func main() {
 
 	mr := gowon.NewMessageRouter()
 	mr.AddCommand("twitter", genTwitterHandler(client))
+	mr.AddRegex(tweetURLRegex, genTweetFromUrlHandler(client))
 	mr.Subscribe(mqttOpts, moduleName)
 
 	log.Print("connecting to broker")

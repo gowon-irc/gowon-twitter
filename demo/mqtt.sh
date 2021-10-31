@@ -5,14 +5,42 @@ BROKER_PORT="${BROKER_PORT:-1883}"
 
 ACTION="${1}"
 
+get_command() {
+    line="${1}"
+
+    if [[ "${line:0:1}" == "." ]]; then
+        f="${line%% *}"
+        echo "${f#\.}"
+    else
+        echo ""
+    fi
+}
+
+get_args() {
+    line="${*}"
+
+    command="$(get_command "${line}")"
+
+    if [[ "${line}" = \.${command}* ]]; then
+        echo "${line#\.${command} }"
+    else
+        echo "${line}"
+    fi
+}
+
 mqtt_msg() {
+    line="${1}"
+    command="$(get_command "${line}")"
+    args="$(get_args "${line}")"
+
 	cat <<-EOF
-	{"module":"gowon","msg":".twitter $@","nick":"tester","dest":"#gowon","command":"twitter","args":"${@}"}
+	{"module":"gowon","msg":"${line}","nick":"tester","dest":"#gowon","command":"${command}","args":"${args}"}
 	EOF
 }
 
 pub() {
-    mqtt_msg "${@}" | mosquitto_pub -h "${BROKER_HOST}" -p "${BROKER_PORT}" -t "/gowon/input" -s
+    mqtt_msg "${*}"
+    mqtt_msg "${*}" | mosquitto_pub -h "${BROKER_HOST}" -p "${BROKER_PORT}" -t "/gowon/input" -s
 }
 
 sub() {
