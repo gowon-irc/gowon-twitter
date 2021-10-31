@@ -53,14 +53,16 @@ func tweetFromUrl(args string, client *twitter.Client) (msg string, err error) {
 		urlsplit := strings.Split(url, "/")
 		id := urlsplit[len(urlsplit)-1]
 		iid, _ := strconv.Atoi(id)
-		tweet, _, err := client.Statuses.Show(int64(iid), nil)
+		tweet, _, err := client.Statuses.Show(int64(iid), &twitter.StatusShowParams{
+			TweetMode: "extended",
+		})
 
 		if err != nil {
 			outList = append(outList, fmt.Sprintf("Could not find tweet with url %s", url))
 			continue
 		}
 
-		outList = append(outList, fmt.Sprintf("{cyan}Tweet from %s:{clear} %s", tweet.User.Name, tweet.Text))
+		outList = append(outList, fmt.Sprintf("{cyan}Tweet from %s:{clear} %s", tweet.User.Name, tweet.FullText))
 	}
 
 	return strings.Join(outList, "\n"), nil
