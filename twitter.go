@@ -1,20 +1,21 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 
-	"github.com/dghubble/go-twitter/twitter"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 )
 
 var (
 	tweetUrlRe = regexp.MustCompile(tweetURLRegex)
 )
 
-func twit(args string, client *twitter.Client) (msg string, err error) {
+func twit(args string, scraper *twitterscraper.Scraper) (msg string, err error) {
 	fields := strings.Fields(args)
 
 	if len(fields) == 0 {
@@ -23,24 +24,18 @@ func twit(args string, client *twitter.Client) (msg string, err error) {
 
 	arg := strings.Fields(args)[0]
 
-	user, _, err := client.Users.Show(&twitter.UserShowParams{
-		ScreenName: arg,
-	})
+	for tweet := range scraper.GetTweets(context.Background(), arg, 1) {
+		if tweet.Error != nil {
+			return "", tweet.Error
+		}
 
-	if err != nil {
-		return "", err
+		return tweet.Text, nil
 	}
 
-	if user.StatusesCount == 0 {
-		return fmt.Sprintf("User %s has no tweets", arg), nil
-	}
-
-	t := strings.Split(user.Status.Text, "\n")[0]
-
-	return t, nil
+	return fmt.Sprintf("User %s has no tweets", arg), nil
 }
 
-func tweetFromUrl(args string, client *twitter.Client) (msg string, err error) {
+func tweetFromUrl(args string, scraper *twitterscraper.Scraper) (msg string, err error) {
 	urls := tweetUrlRe.FindAllString(args, -1)
 
 	if len(urls) == 0 {
@@ -49,20 +44,25 @@ func tweetFromUrl(args string, client *twitter.Client) (msg string, err error) {
 
 	outList := []string{}
 
-	for _, url := range urls {
-		urlsplit := strings.Split(url, "/")
-		id := urlsplit[len(urlsplit)-1]
-		iid, _ := strconv.Atoi(id)
-		tweet, _, err := client.Statuses.Show(int64(iid), &twitter.StatusShowParams{
-			TweetMode: "extended",
-		})
+	for _, u := range urls {
+		up, err := url.Parse("https://" + u)
 
 		if err != nil {
-			outList = append(outList, fmt.Sprintf("Could not find tweet with url %s", url))
+			outList = append(outList, fmt.Sprintf("Could not parse tweet with url %s", u))
 			continue
 		}
 
-		outList = append(outList, fmt.Sprintf("{cyan}Tweet from %s:{clear} %s", tweet.User.Name, tweet.FullText))
+		us := strings.Split(up.Path, "/")
+		id := us[len(us)-1]
+
+		tweet, err := scraper.GetTweet(id)
+
+		if err != nil {
+			outList = append(outList, fmt.Sprintf("Could not find tweet with url %s", u))
+			continue
+		}
+
+		outList = append(outList, fmt.Sprintf("{cyan}Tweet from %s:{clear} %s", tweet.Name, tweet.Text))
 	}
 
 	return strings.Join(outList, "\n"), nil

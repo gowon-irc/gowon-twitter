@@ -12,17 +12,12 @@ import (
 	"github.com/gowon-irc/go-gowon"
 	"github.com/jessevdk/go-flags"
 
-	"github.com/dghubble/go-twitter/twitter"
-	"github.com/dghubble/oauth1"
+	twitterscraper "github.com/n0madic/twitter-scraper"
 )
 
 type Options struct {
-	Prefix         string `short:"P" long:"prefix" env:"GOWON_PREFIX" default:"." description:"prefix for commands"`
-	Broker         string `short:"b" long:"broker" env:"GOWON_BROKER" default:"localhost:1883" description:"mqtt broker"`
-	ConsumerKey    string `short:"c" long:"consumer-key" env:"GOWON_TWITTER_CONSUMER_KEY" required:"true" description:"twitter consumer key"`
-	ConsumerSecret string `short:"C" long:"consumer-secret" env:"GOWON_TWITTER_CONSUMER_SECRET" required:"true" description:"twitter consumer secret"`
-	AccessToken    string `short:"a" long:"access-token" env:"GOWON_TWITTER_ACCESS_TOKEN" required:"true" description:"twitter access token"`
-	AccessSecret   string `short:"A" long:"access-secret" env:"GOWON_TWITTER_ACCESS_SECRET" required:"true" description:"twitter access secret"`
+	Prefix string `short:"P" long:"prefix" env:"GOWON_PREFIX" default:"." description:"prefix for commands"`
+	Broker string `short:"b" long:"broker" env:"GOWON_BROKER" default:"localhost:1883" description:"mqtt broker"`
 }
 
 const (
@@ -32,15 +27,15 @@ const (
 	tweetURLRegex            = `(http(s)?:\/\/.)?(www\.)?twitter.com/\w+/status/\d+`
 )
 
-func genTwitterHandler(client *twitter.Client) func(m gowon.Message) (string, error) {
+func genTwitterHandler(scraper *twitterscraper.Scraper) func(m gowon.Message) (string, error) {
 	return func(m gowon.Message) (string, error) {
-		return twit(m.Args, client)
+		return twit(m.Args, scraper)
 	}
 }
 
-func genTweetFromUrlHandler(client *twitter.Client) func(m gowon.Message) (string, error) {
+func genTweetFromUrlHandler(scraper *twitterscraper.Scraper) func(m gowon.Message) (string, error) {
 	return func(m gowon.Message) (string, error) {
-		return tweetFromUrl(m.Args, client)
+		return tweetFromUrl(m.Args, scraper)
 	}
 }
 
@@ -80,14 +75,11 @@ func main() {
 	mqttOpts.OnReconnecting = onRecconnectingHandler
 	mqttOpts.OnConnect = onConnectHandler
 
-	config := oauth1.NewConfig(opts.ConsumerKey, opts.ConsumerSecret)
-	token := oauth1.NewToken(opts.AccessToken, opts.AccessSecret)
-	httpClient := config.Client(oauth1.NoContext, token)
-	client := twitter.NewClient(httpClient)
+	scraper := twitterscraper.New()
 
 	mr := gowon.NewMessageRouter()
-	mr.AddCommand("twitter", genTwitterHandler(client))
-	mr.AddRegex(tweetURLRegex, genTweetFromUrlHandler(client))
+	mr.AddCommand("twitter", genTwitterHandler(scraper))
+	mr.AddRegex(tweetURLRegex, genTweetFromUrlHandler(scraper))
 	mr.Subscribe(mqttOpts, moduleName)
 
 	log.Print("connecting to broker")
